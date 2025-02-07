@@ -1,4 +1,5 @@
 // server.js
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -6,23 +7,36 @@ const nodemailer = require('nodemailer');
 const http = require('http');
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
-require('dotenv').config();
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
-// Import Message model
+// Import Message model (ensure your model file exists at './models/message.js')
 const Message = require('./models/message.js');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
 
+// Middleware for security and request parsing
+app.use(helmet());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Apply a rate limiter to all requests (optional but recommended)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
+
+// Serve static files from the 'public' folder
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
-
-// Middleware configuration
-app.use(express.static('public'));
-app.use(bodyParser.urlencoded({ extended: true }));
 
 // In-memory stores for demonstration purposes
 let students = [];   // Each student: { reg, name, branch, gender, email, crushes }
@@ -248,13 +262,11 @@ io.on('connection', (socket) => {
   
   // Mark messages as read
   socket.on('markAsRead', async (data) => {
-    // data: { room, user }
     try {
       await Message.updateMany(
         { room: data.room, readBy: { $ne: data.user } },
         { $push: { readBy: data.user } }
       );
-      // Optionally, notify others that messages have been read
       socket.to(data.room).emit('messagesRead', { user: data.user });
     } catch (err) {
       console.error('Error updating read receipts:', err);
@@ -266,8 +278,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Start the server on the port defined in the environment or default to 3000
+server.listen(process.env.PORT || 3000, () => {
+  console.log(`Server running on port ${process.env.PORT || 3000}`);
 });
