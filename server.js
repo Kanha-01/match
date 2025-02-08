@@ -11,7 +11,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 // Import Message model (ensure your model file exists at './models/message.js')
-const Message = require('./models/message.js');
+const Message = require('./models/Message.js');
 
 const app = express();
 const server = http.createServer(app);
